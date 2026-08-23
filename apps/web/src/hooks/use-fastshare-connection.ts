@@ -34,6 +34,12 @@ export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
       iceConnectionState: 'closed',
       dataChannelState: 'none',
     });
+    setCredentials(undefined);
+    setReceivedTest(false);
+    setSendProgress(undefined);
+    setReceiveProgress(undefined);
+    setReceivedFile(undefined);
+    setError(undefined);
   }, []);
 
   useEffect(() => disconnect, [disconnect]);
