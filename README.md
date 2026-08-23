@@ -1,8 +1,9 @@
 # FastShare
 
 FastShare is a browser-based peer-to-peer file-sharing project. This repository
-currently contains only its web-focused development foundation; room management,
-signaling, WebRTC transfer, and file handling have not been implemented.
+contains a web-focused foundation and a WebSocket signaling server. Room state is
+ephemeral and exists only to route signaling messages; WebRTC transfer and file
+handling have not been implemented.
 
 ## Workspace
 
@@ -23,3 +24,5 @@ pnpm typecheck
 pnpm lint
 pnpm build
 ```
+
+Start the signaling server with `pnpm --filter @fastshare/signaling-server start`.

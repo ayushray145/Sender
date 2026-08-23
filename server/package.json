@@ -4,6 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "tsx src/index.ts",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit --project tsconfig.json"
+  },
+  "dependencies": {
+    "@fastshare/protocol": "workspace:*",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.20.5",
+    "vitest": "^3.2.4"
   }
 }

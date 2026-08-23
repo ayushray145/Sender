@@ -13,7 +13,7 @@
     "lint": "eslint .",
     "format": "prettier --config packages/config/prettier.config.js --write .",
     "format:check": "prettier --config packages/config/prettier.config.js --check .",
-    "test": "pnpm --filter @fastshare/web test",
+    "test": "pnpm -r --if-present test",
     "typecheck": "tsc --build --pretty false"
   },
   "devDependencies": {
