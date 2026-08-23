@@ -1,0 +1,28 @@
+{
+  "name": "fastshare",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm --filter @fastshare/web build",
+    "dev": "pnpm --filter @fastshare/web dev",
+    "lint": "eslint .",
+    "format": "prettier --config packages/config/prettier.config.js --write .",
+    "format:check": "prettier --config packages/config/prettier.config.js --check .",
+    "test": "pnpm --filter @fastshare/web test",
+    "typecheck": "tsc --build --pretty false"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.35.0",
+    "@fastshare/config": "workspace:*",
+    "@types/node": "^24.5.2",
+    "eslint": "^9.35.0",
+    "prettier": "^3.6.2",
+    "typescript": "5.8.3",
+    "typescript-eslint": "^8.42.0"
+  }
+}

@@ -43,9 +43,12 @@ Core constraints:
 
 The system consists of:
 
-* `client/` — React + TypeScript web application.
+* `apps/web/` — React + TypeScript web application.
 * `server/` — Node.js signaling server.
-* `shared/` — shared protocol types and validation contracts.
+* `packages/protocol/` — shared protocol types and validation contracts.
+* `packages/transfer-core/` — browser-side transfer orchestration.
+* `packages/config/` — shared development tooling configuration.
+* `tests/` — integration, performance, and fixture locations.
 * `docs/` — source of truth for architecture, requirements, protocol, security, performance, testing, and deployment.
 
 The signaling server coordinates peers but must not receive, store, or relay normal file payloads.
@@ -174,7 +177,7 @@ Room codes must not be the sole security boundary. Internal room identifiers/sec
 * Keep networking logic separate from UI.
 * Keep transfer logic separate from WebRTC connection management.
 * Keep cryptographic functionality separate from transfer logic.
-* Keep protocol definitions in `shared/`.
+* Keep protocol definitions in `packages/protocol/`.
 * Use clear names instead of clever abstractions.
 
 ## Error handling

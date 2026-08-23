@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./apps/web" },
+    { "path": "./packages/config" },
+    { "path": "./packages/protocol" },
+    { "path": "./packages/transfer-core" },
+    { "path": "./server" }
+  ]
+}
