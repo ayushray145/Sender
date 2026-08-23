@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const ROOM_CODE_PATTERN = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/;
 
 export function createPeerId(): string {
   return randomUUID();
@@ -13,6 +14,9 @@ export function createRoomCode(): string {
   let code = '';
   for (const byte of bytes) code += ROOM_CODE_ALPHABET[byte % ROOM_CODE_ALPHABET.length];
   return code;
+}
+export function isValidRoomCode(roomCode: string): boolean {
+  return ROOM_CODE_PATTERN.test(roomCode);
 }
 export function createRoomToken(): string {
   return randomBytes(32).toString('hex');

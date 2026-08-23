@@ -66,6 +66,8 @@ export type SignalingErrorCode =
   | 'message-too-large'
   | 'invalid-state'
   | 'room-not-found'
+  | 'room-expired'
+  | 'invalid-room-code'
   | 'room-access-denied'
   | 'room-full'
   | 'peer-unavailable';

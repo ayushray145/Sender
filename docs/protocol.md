@@ -21,6 +21,9 @@ member of the same ephemeral two-peer room.
 The server sends `room.created`, `room.joined`, `peer.joined`, `peer.left`, and
 the routed `signal.*` messages. Invalid input receives a safe `error` message.
 
-Rooms, peer IDs, room codes, and room tokens exist only in process memory. Native
-WebSocket ping/pong heartbeats detect dead connections; a disconnect removes the
-peer from its room and notifies the remaining peer.
+Rooms, peer IDs, room codes, and room tokens exist only in process memory. Every
+room records its creation and expiration timestamps, starts in `waiting-for-peer`,
+and becomes `ready` once its two permitted peers are present. Rooms expire after
+30 minutes, and are also deleted immediately when empty. Native WebSocket
+ping/pong heartbeats detect dead connections; a disconnect removes the peer from
+its room and notifies the remaining peer.

@@ -8,10 +8,10 @@ handling have not been implemented.
 ## Workspace
 
 - `apps/web` — React and Vite web application shell.
-- `packages/protocol` — reserved boundary for shared signaling contracts.
+- `packages/protocol` — shared signaling contracts and validation.
 - `packages/transfer-core` — reserved boundary for browser transfer orchestration.
 - `packages/config` — shared linting and formatting configuration.
-- `server` — reserved boundary for the future signaling server.
+- `server` — in-memory WebSocket signaling and temporary room lifecycle.
 - `tests` — integration, performance, and fixture locations.
 
 ## Commands

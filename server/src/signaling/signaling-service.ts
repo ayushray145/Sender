@@ -8,13 +8,16 @@ import {
 import type WebSocket from 'ws';
 import { createPeerId } from '../security/identifiers.js';
 import { safeSend } from '../utils/safe-send.js';
-import { RoomRegistry } from './room-registry.js';
+import { RoomManager } from './room-manager.js';
 
 type PeerConnection = { readonly id: string; readonly socket: WebSocket; alive: boolean };
 
 export class SignalingService {
-  readonly rooms = new RoomRegistry();
+  readonly rooms: RoomManager;
   private readonly peers = new Map<string, PeerConnection>();
+  constructor(rooms = new RoomManager()) {
+    this.rooms = rooms;
+  }
   connect(socket: WebSocket): string {
     const peerId = createPeerId();
     this.peers.set(peerId, { id: peerId, socket, alive: true });
@@ -29,6 +32,7 @@ export class SignalingService {
     byteLength = Buffer.byteLength(rawMessage),
   ): void {
     if (!this.peers.has(peerId)) return;
+    this.cleanupExpiredRooms();
     if (byteLength > MAX_SIGNALING_MESSAGE_BYTES) {
       this.sendError(
         peerId,
@@ -56,6 +60,7 @@ export class SignalingService {
     if (peer !== undefined) peer.alive = true;
   }
   checkHeartbeats(): void {
+    this.cleanupExpiredRooms();
     for (const peer of [...this.peers.values()]) {
       if (!peer.alive) {
         peer.socket.terminate();
@@ -69,11 +74,19 @@ export class SignalingService {
   get connectionCount(): number {
     return this.peers.size;
   }
+  cleanupExpiredRooms(): void {
+    for (const room of this.rooms.expireRooms()) {
+      for (const peerId of room.peerIds) {
+        this.sendError(peerId, 'room-expired', 'The room has expired.');
+      }
+    }
+  }
 
   private handleMessage(peerId: string, message: ClientMessage): void {
     switch (message.type) {
       case 'room.create': {
-        if (this.rooms.getRoomForPeer(peerId) !== undefined) {
+        const result = this.rooms.create(peerId);
+        if (!result.success) {
           this.sendError(
             peerId,
             'invalid-state',
@@ -81,7 +94,7 @@ export class SignalingService {
           );
           return;
         }
-        const room = this.rooms.create(peerId);
+        const { room } = result;
         this.sendTo(peerId, {
           type: 'room.created',
           roomId: room.id,
@@ -92,17 +105,21 @@ export class SignalingService {
         return;
       }
       case 'room.join': {
-        if (this.rooms.getRoomForPeer(peerId) !== undefined) {
-          this.sendError(
-            peerId,
-            'invalid-state',
-            'Leave the current room before joining another room.',
-          );
-          return;
-        }
         const result = this.rooms.join(peerId, message.roomCode, message.roomToken);
         if (!result.success) {
-          this.sendError(peerId, result.reason, 'The requested room is not available.');
+          this.sendError(
+            peerId,
+            result.reason === 'invalid-room-code'
+              ? 'invalid-room-code'
+              : result.reason === 'room-not-found'
+                ? 'room-not-found'
+                : result.reason === 'room-access-denied'
+                  ? 'room-access-denied'
+                  : result.reason === 'room-full'
+                    ? 'room-full'
+                    : 'invalid-state',
+            'The requested room is not available.',
+          );
           return;
         }
         this.sendTo(peerId, {
