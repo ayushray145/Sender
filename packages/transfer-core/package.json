@@ -3,10 +3,17 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
+    "test": "vitest run",
     "typecheck": "tsc --noEmit --project tsconfig.json"
   },
   "dependencies": {
     "@fastshare/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
   }
 }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { FileTransferManager, type TransferProgress } from '@fastshare/transfer-core';
 import type { PeerConnectionStatus } from '../network/peer-connection-manager.js';
 import { PeerConnectionManager } from '../network/peer-connection-manager.js';
 import { SignalingClient } from '../network/signaling-client.js';
@@ -8,6 +9,7 @@ type RoomCredentials = { readonly roomCode: string; readonly roomToken: string }
 export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
   const clientRef = useRef<SignalingClient | undefined>(undefined);
   const managerRef = useRef<PeerConnectionManager | undefined>(undefined);
+  const transferRef = useRef<FileTransferManager | undefined>(undefined);
   const [credentials, setCredentials] = useState<RoomCredentials>();
   const [status, setStatus] = useState<PeerConnectionStatus>({
     connectionState: 'closed',
@@ -16,8 +18,13 @@ export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
   });
   const [receivedTest, setReceivedTest] = useState(false);
   const [error, setError] = useState<string>();
+  const [sendProgress, setSendProgress] = useState<TransferProgress>();
+  const [receiveProgress, setReceiveProgress] = useState<TransferProgress>();
+  const [receivedFile, setReceivedFile] = useState<File>();
 
   const disconnect = useCallback(() => {
+    transferRef.current?.destroy();
+    transferRef.current = undefined;
     managerRef.current?.destroy();
     managerRef.current = undefined;
     clientRef.current?.close();
@@ -45,6 +52,20 @@ export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
         onStatusChange: setStatus,
         onConnectionTestMessage: () => setReceivedTest(true),
         onError: (connectionError) => setError(connectionError.message),
+        onDataChannelAvailable: (channel) => {
+          transferRef.current?.destroy();
+          transferRef.current = new FileTransferManager({
+            channel,
+            onSendProgress: setSendProgress,
+            onReceiveProgress: setReceiveProgress,
+            onFileReceived: ({ file }) => setReceivedFile(file),
+            onError: (transferError) => setError(transferError.message),
+          });
+        },
+        onDataChannelUnavailable: () => {
+          transferRef.current?.destroy();
+          transferRef.current = undefined;
+        },
       });
       clientRef.current = client;
       managerRef.current = manager;
@@ -80,6 +101,16 @@ export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
     }
   }, []);
 
+  const sendFile = useCallback(async (file: File) => {
+    try {
+      setSendProgress(undefined);
+      await transferRef.current?.sendFile(file);
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : 'Unable to send the file.');
+    }
+  }, []);
+  const cancelTransfer = useCallback(() => transferRef.current?.cancel(), []);
+
   return {
     credentials,
     status,
@@ -88,6 +119,11 @@ export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
     createRoom,
     joinRoom,
     sendConnectionTest,
+    sendFile,
+    cancelTransfer,
+    sendProgress,
+    receiveProgress,
+    receivedFile,
     disconnect,
   };
 }

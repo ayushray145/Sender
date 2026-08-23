@@ -15,6 +15,8 @@ export type PeerConnectionManagerOptions = {
   readonly createPeerConnection?: (configuration: RTCConfiguration) => RTCPeerConnection;
   readonly onStatusChange?: (status: PeerConnectionStatus) => void;
   readonly onConnectionTestMessage?: (message: string) => void;
+  readonly onDataChannelAvailable?: (channel: RTCDataChannel) => void;
+  readonly onDataChannelUnavailable?: () => void;
   readonly onError?: (error: Error) => void;
 };
 
@@ -166,8 +168,13 @@ export class PeerConnectionManager {
   private attachDataChannel(channel: RTCDataChannel): void {
     this.channel?.close();
     this.channel = channel;
+    channel.binaryType = 'arraybuffer';
+    this.options.onDataChannelAvailable?.(channel);
     channel.addEventListener('open', () => this.emitStatus());
-    channel.addEventListener('close', () => this.emitStatus());
+    channel.addEventListener('close', () => {
+      this.emitStatus();
+      if (this.channel === channel) this.options.onDataChannelUnavailable?.();
+    });
     channel.addEventListener('error', () =>
       this.options.onError?.(new Error('The data channel failed.')),
     );
@@ -183,6 +190,7 @@ export class PeerConnectionManager {
     this.pendingCandidates = [];
     this.channel?.close();
     this.channel = undefined;
+    this.options.onDataChannelUnavailable?.();
     this.connection?.close();
     this.connection = undefined;
     this.emitStatus();

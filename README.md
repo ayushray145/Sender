@@ -2,9 +2,9 @@
 
 FastShare is a browser-based peer-to-peer file-sharing project. This repository
 contains a web-focused foundation and a WebSocket signaling server. Room state is
-ephemeral and exists only to route signaling messages; WebRTC transfer and file
-handling have not been implemented. Phase 3 adds a temporary RTCDataChannel used
-only for a bidirectional connection-test message; file transfer remains unimplemented.
+ephemeral and exists only to route signaling messages. Phase 4 adds a correctness-first
+direct transfer for one file up to 100 MiB over the RTCDataChannel, with SHA-256
+integrity checks. It does not claim 5 GiB support yet.
 
 ## Workspace
 

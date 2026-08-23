@@ -35,6 +35,9 @@ importers:
       '@fastshare/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@fastshare/transfer-core':
+        specifier: workspace:*
+        version: link:../../packages/transfer-core
       react:
         specifier: ^19.1.1
         version: 19.2.8
@@ -78,6 +81,10 @@ importers:
       '@fastshare/protocol':
         specifier: workspace:*
         version: link:../protocol
+    devDependencies:
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@24.13.3)(tsx@4.23.12)
 
   server:
     dependencies:

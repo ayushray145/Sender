@@ -11,13 +11,22 @@ export function App() {
   const [roomToken, setRoomToken] = useState('');
   const connection = useFastShareConnection(signalingUrl, stunUrl);
   const ready = connection.status.dataChannelState === 'open';
+  const downloadReceivedFile = () => {
+    if (connection.receivedFile === undefined) return;
+    const url = URL.createObjectURL(connection.receivedFile);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = connection.receivedFile.name;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <main>
       <h1>FastShare connection test</h1>
       <p>
-        Use two browsers to establish an encrypted browser-to-browser data channel. No files are
-        transferred in this phase.
+        Transfer one file directly between two browsers. This correctness-first phase supports up to
+        100 MiB; it does not claim 5 GiB support yet.
       </p>
       <label>
         Signaling WebSocket URL
@@ -71,6 +80,40 @@ export function App() {
       {connection.receivedTest && (
         <p role="status">Received “FastShare connection test” over WebRTC.</p>
       )}
+      <section>
+        <label>
+          File to send (up to 100 MiB)
+          <input
+            type="file"
+            disabled={!ready}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file !== undefined) void connection.sendFile(file);
+              event.target.value = '';
+            }}
+          />
+        </label>
+        {connection.sendProgress !== undefined && (
+          <p>
+            Sending {connection.sendProgress.name}: {connection.sendProgress.transferred} /{' '}
+            {connection.sendProgress.total} bytes
+          </p>
+        )}
+        {connection.receiveProgress !== undefined && (
+          <p>
+            Receiving {connection.receiveProgress.name}: {connection.receiveProgress.transferred} /{' '}
+            {connection.receiveProgress.total} bytes
+          </p>
+        )}
+        <button type="button" onClick={connection.cancelTransfer}>
+          Cancel transfer
+        </button>
+        {connection.receivedFile !== undefined && (
+          <button type="button" onClick={downloadReceivedFile}>
+            Download {connection.receivedFile.name}
+          </button>
+        )}
+      </section>
       {connection.error !== undefined && <p role="alert">{connection.error}</p>}
       <button type="button" onClick={connection.disconnect}>
         Disconnect
