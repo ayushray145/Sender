@@ -10,17 +10,34 @@ import { createPeerId } from '../security/identifiers.js';
 import { safeSend } from '../utils/safe-send.js';
 import { RoomManager } from './room-manager.js';
 
-type PeerConnection = { readonly id: string; readonly socket: WebSocket; alive: boolean };
+type PeerConnection = {
+  readonly id: string;
+  readonly socket: WebSocket;
+  alive: boolean;
+  violations: number;
+  windowStartedAt: number;
+  messagesInWindow: number;
+};
 
 export class SignalingService {
   readonly rooms: RoomManager;
   private readonly peers = new Map<string, PeerConnection>();
-  constructor(rooms = new RoomManager()) {
+  constructor(
+    rooms = new RoomManager(),
+    private readonly now: () => number = Date.now,
+  ) {
     this.rooms = rooms;
   }
   connect(socket: WebSocket): string {
     const peerId = createPeerId();
-    this.peers.set(peerId, { id: peerId, socket, alive: true });
+    this.peers.set(peerId, {
+      id: peerId,
+      socket,
+      alive: true,
+      violations: 0,
+      windowStartedAt: this.now(),
+      messagesInWindow: 0,
+    });
     return peerId;
   }
   disconnect(peerId: string): void {
@@ -31,10 +48,21 @@ export class SignalingService {
     rawMessage: string,
     byteLength = Buffer.byteLength(rawMessage),
   ): void {
-    if (!this.peers.has(peerId)) return;
+    const peer = this.peers.get(peerId);
+    if (peer === undefined) return;
+    const now = this.now();
+    if (now - peer.windowStartedAt >= 10_000) {
+      peer.windowStartedAt = now;
+      peer.messagesInWindow = 0;
+    }
+    peer.messagesInWindow += 1;
+    if (peer.messagesInWindow > 60) {
+      this.violation(peerId, 'invalid-state', 'Too many signaling messages.');
+      return;
+    }
     this.cleanupExpiredRooms();
     if (byteLength > MAX_SIGNALING_MESSAGE_BYTES) {
-      this.sendError(
+      this.violation(
         peerId,
         'message-too-large',
         'Signaling messages must be smaller than 64 KiB.',
@@ -45,12 +73,12 @@ export class SignalingService {
     try {
       parsed = JSON.parse(rawMessage) as unknown;
     } catch {
-      this.sendError(peerId, 'malformed-json', 'The signaling message must be valid JSON.');
+      this.violation(peerId, 'malformed-json', 'The signaling message must be valid JSON.');
       return;
     }
     const result = parseClientMessage(parsed);
     if (!result.success) {
-      this.sendError(peerId, 'invalid-message', 'The signaling message is invalid.');
+      this.violation(peerId, 'invalid-message', 'The signaling message is invalid.');
       return;
     }
     this.handleMessage(peerId, result.value);
@@ -176,6 +204,14 @@ export class SignalingService {
   }
   private sendError(peerId: string, code: SignalingErrorCode, message: string): void {
     this.sendTo(peerId, { type: 'error', code, message });
+  }
+  private violation(peerId: string, code: SignalingErrorCode, message: string): void {
+    this.sendError(peerId, code, message);
+    const peer = this.peers.get(peerId);
+    if (peer !== undefined && ++peer.violations >= 3) {
+      peer.socket.terminate();
+      this.disconnect(peerId);
+    }
   }
   private sendTo(peerId: string, message: ServerMessage): void {
     const peer = this.peers.get(peerId);

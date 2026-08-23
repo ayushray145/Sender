@@ -67,6 +67,15 @@ describe('SignalingService', () => {
     service.handleRawMessage(peerId, '{}', MAX_SIGNALING_MESSAGE_BYTES + 1);
     expect(lastMessage(socket)).toMatchObject({ type: 'error', code: 'message-too-large' });
   });
+  it('terminates clients after repeated invalid messages and rate limits bursts', () => {
+    const service = new SignalingService();
+    const socket = new FakeSocket();
+    const peerId = service.connect(asWebSocket(socket));
+    service.handleRawMessage(peerId, '{bad');
+    service.handleRawMessage(peerId, '{bad');
+    service.handleRawMessage(peerId, '{bad');
+    expect(socket.terminated).toBe(true);
+  });
   it('cleans up room membership and notifies the remaining peer on disconnect', () => {
     const service = new SignalingService();
     const first = new FakeSocket();

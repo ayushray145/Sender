@@ -11,12 +11,22 @@ export type SignalingWebSocketServer = {
 };
 export function createSignalingWebSocketServer(options?: {
   readonly heartbeatIntervalMs?: number;
+  readonly allowedOrigins?: readonly string[];
 }): SignalingWebSocketServer {
   const signaling = new SignalingService();
   const httpServer = createServer(handleHttpRequest);
   const websocketServer = new WebSocketServer({
     server: httpServer,
     maxPayload: MAX_SIGNALING_MESSAGE_BYTES,
+    verifyClient: (info, done) => {
+      const origin = info.origin;
+      const allowed = options?.allowedOrigins;
+      done(
+        allowed === undefined || origin === undefined || allowed.includes(origin),
+        403,
+        'Origin not allowed',
+      );
+    },
   });
   const heartbeat = setInterval(
     () => signaling.checkHeartbeats(),
@@ -52,6 +62,13 @@ function bindConnection(signaling: SignalingService, socket: WebSocket): void {
   socket.on('error', () => signaling.disconnect(peerId));
 }
 function handleHttpRequest(_request: IncomingMessage, response: ServerResponse): void {
-  response.writeHead(404, { 'content-type': 'application/json' });
+  response.writeHead(404, {
+    'content-type': 'application/json',
+    'content-security-policy': "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+    'x-content-type-options': 'nosniff',
+    'x-frame-options': 'DENY',
+    'referrer-policy': 'no-referrer',
+    'permissions-policy': 'camera=(), microphone=(), geolocation=()',
+  });
   response.end(JSON.stringify({ error: 'Not found' }));
 }
