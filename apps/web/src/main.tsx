@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-
+import { App } from './App.js';
 import './styles.css';
 
 const rootElement = document.getElementById('root');
@@ -11,9 +11,6 @@ if (rootElement === null) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <main>
-      <h1>FastShare</h1>
-      <p>The web application foundation is ready for incremental development.</p>
-    </main>
+    <App />
   </StrictMode>,
 );

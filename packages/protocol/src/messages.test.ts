@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseClientMessage } from './messages.js';
+import { parseClientMessage, parseServerMessage } from './messages.js';
 
 describe('parseClientMessage', () => {
   it('accepts a structurally valid offer', () => {
@@ -26,6 +26,29 @@ describe('parseClientMessage', () => {
       success: false,
     });
     expect(parseClientMessage({ type: 'room.create', extra: true })).toMatchObject({
+      success: false,
+    });
+  });
+});
+
+describe('parseServerMessage', () => {
+  it('accepts a routed ICE candidate', () => {
+    expect(
+      parseServerMessage({
+        type: 'signal.ice-candidate',
+        peerId: 'peer-1',
+        candidate: {
+          candidate: 'candidate:1',
+          sdpMid: '0',
+          sdpMLineIndex: 0,
+          usernameFragment: null,
+        },
+      }),
+    ).toMatchObject({ success: true });
+  });
+
+  it('rejects malformed server messages', () => {
+    expect(parseServerMessage({ type: 'peer.joined', peerId: '' })).toMatchObject({
       success: false,
     });
   });
