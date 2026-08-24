@@ -21,7 +21,11 @@ export type IceCandidate = {
 
 export type ClientMessage =
   | { readonly type: 'room.create' }
-  | { readonly type: 'room.join'; readonly roomCode: string; readonly roomToken: string }
+  | {
+      readonly type: 'room.join';
+      readonly roomCode: string;
+      readonly roomToken?: string | undefined;
+    }
   | { readonly type: 'room.leave' }
   | { readonly type: 'signal.offer'; readonly description: OfferDescription }
   | { readonly type: 'signal.answer'; readonly description: AnswerDescription }
@@ -169,17 +173,37 @@ export function parseClientMessage(value: unknown): ValidationResult<ClientMessa
       return hasExactKeys(value, ['type'])
         ? { success: true, value: { type: value.type } }
         : { success: false, error: 'Unexpected message fields.' };
-    case 'room.join':
-      return hasExactKeys(value, ['type', 'roomCode', 'roomToken']) &&
-        typeof value.roomCode === 'string' &&
-        ROOM_CODE_PATTERN.test(value.roomCode) &&
-        typeof value.roomToken === 'string' &&
-        ROOM_TOKEN_PATTERN.test(value.roomToken)
-        ? {
-            success: true,
-            value: { type: 'room.join', roomCode: value.roomCode, roomToken: value.roomToken },
-          }
-        : { success: false, error: 'Invalid room credentials.' };
+    case 'room.join': {
+      if (
+        !isRecord(value) ||
+        typeof value.roomCode !== 'string' ||
+        !ROOM_CODE_PATTERN.test(value.roomCode.trim().toUpperCase())
+      ) {
+        return { success: false, error: 'Invalid room credentials.' };
+      }
+      const roomCode = value.roomCode.trim().toUpperCase();
+      if (hasExactKeys(value, ['type', 'roomCode'])) {
+        return { success: true, value: { type: 'room.join', roomCode } };
+      }
+      if (
+        hasExactKeys(value, ['type', 'roomCode', 'roomToken']) &&
+        (value.roomToken === undefined ||
+          value.roomToken === '' ||
+          (typeof value.roomToken === 'string' && ROOM_TOKEN_PATTERN.test(value.roomToken)))
+      ) {
+        return {
+          success: true,
+          value: {
+            type: 'room.join',
+            roomCode,
+            ...(typeof value.roomToken === 'string' && value.roomToken.length === 64
+              ? { roomToken: value.roomToken }
+              : {}),
+          },
+        };
+      }
+      return { success: false, error: 'Invalid room credentials.' };
+    }
     case 'signal.offer': {
       const description = parseDescription(value.description, 'offer');
       return hasExactKeys(value, ['type', 'description']) && description.success

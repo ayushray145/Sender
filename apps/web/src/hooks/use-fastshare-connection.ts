@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ClientMessage } from '@fastshare/protocol';
 import { FileTransferManager, type TransferProgress } from '@fastshare/transfer-core';
 import type { PeerConnectionStatus } from '../network/peer-connection-manager.js';
 import { PeerConnectionManager } from '../network/peer-connection-manager.js';
 import { SignalingClient } from '../network/signaling-client.js';
 
-type RoomCredentials = { readonly roomCode: string; readonly roomToken: string };
+type RoomCredentials = { readonly roomCode: string; readonly roomToken?: string | undefined };
 
 export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
   const clientRef = useRef<SignalingClient | undefined>(undefined);
@@ -82,8 +83,17 @@ export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
       });
       try {
         await client.connect();
-        if (action === 'create') client.send({ type: 'room.create' });
-        else if (room !== undefined) client.send({ type: 'room.join', ...room });
+        if (action === 'create') {
+          client.send({ type: 'room.create' });
+        } else if (room !== undefined) {
+          const cleanCode = room.roomCode.trim().toUpperCase();
+          const cleanToken = room.roomToken?.trim();
+          const joinMsg: ClientMessage =
+            cleanToken && cleanToken.length === 64
+              ? { type: 'room.join', roomCode: cleanCode, roomToken: cleanToken }
+              : { type: 'room.join', roomCode: cleanCode };
+          client.send(joinMsg);
+        }
       } catch (connectionError) {
         setError(connectionError instanceof Error ? connectionError.message : 'Unable to connect.');
         disconnect();
@@ -94,7 +104,7 @@ export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
 
   const createRoom = useCallback(() => connect('create'), [connect]);
   const joinRoom = useCallback(
-    (roomCode: string, roomToken: string) => connect('join', { roomCode, roomToken }),
+    (roomCode: string, roomToken?: string) => connect('join', { roomCode, roomToken }),
     [connect],
   );
   const sendConnectionTest = useCallback(() => {

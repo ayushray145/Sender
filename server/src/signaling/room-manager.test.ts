@@ -26,10 +26,10 @@ describe('RoomManager', () => {
     expect(room.peerIds).toEqual(new Set(['sender']));
   });
 
-  it('allows one authorized peer to join and transitions the room to ready', () => {
+  it('allows one authorized peer to join with or without explicit token and transitions the room to ready', () => {
     const manager = new RoomManager();
     const room = createRoom(manager);
-    const result = manager.join('receiver', room.code, room.token);
+    const result = manager.join('receiver', room.code);
 
     expect(result).toMatchObject({ success: true, existingPeerId: 'sender' });
     expect(room.state).toBe('ready');

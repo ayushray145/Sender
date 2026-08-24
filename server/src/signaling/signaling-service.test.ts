@@ -56,6 +56,28 @@ describe('SignalingService', () => {
       description: { type: 'offer', sdp: 'v=0\r\n' },
     });
   });
+
+  it('allows joining a room with code only without specifying a room token', () => {
+    const service = new SignalingService();
+    const sender = new FakeSocket();
+    const receiver = new FakeSocket();
+    const senderId = service.connect(asWebSocket(sender));
+    const receiverId = service.connect(asWebSocket(receiver));
+    service.handleRawMessage(senderId, JSON.stringify({ type: 'room.create' }));
+    const created = lastMessage(sender);
+    expect(created?.type).toBe('room.created');
+    if (created?.type !== 'room.created') throw new Error('Expected a room.created message.');
+
+    service.handleRawMessage(
+      receiverId,
+      JSON.stringify({
+        type: 'room.join',
+        roomCode: created.roomCode,
+      }),
+    );
+    expect(lastMessage(receiver)).toMatchObject({ type: 'room.joined', peerId: receiverId });
+    expect(lastMessage(sender)).toEqual({ type: 'peer.joined', peerId: receiverId });
+  });
   it('safely rejects malformed JSON, unsupported types, and oversized messages', () => {
     const service = new SignalingService();
     const socket = new FakeSocket();

@@ -21,6 +21,30 @@ describe('parseClientMessage', () => {
     });
   });
 
+  it('accepts valid room.join with code only or code and token', () => {
+    expect(
+      parseClientMessage({
+        type: 'room.join',
+        roomCode: 'ABCDEFGH23',
+      }),
+    ).toEqual({
+      success: true,
+      value: { type: 'room.join', roomCode: 'ABCDEFGH23' },
+    });
+
+    const token = 'a'.repeat(64);
+    expect(
+      parseClientMessage({
+        type: 'room.join',
+        roomCode: 'ABCDEFGH23',
+        roomToken: token,
+      }),
+    ).toEqual({
+      success: true,
+      value: { type: 'room.join', roomCode: 'ABCDEFGH23', roomToken: token },
+    });
+  });
+
   it('rejects malformed signaling payloads and unexpected fields', () => {
     expect(parseClientMessage({ type: 'signal.ice-candidate', candidate: {} })).toMatchObject({
       success: false,

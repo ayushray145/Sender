@@ -58,7 +58,7 @@ export class RoomManager {
     return { success: true, room };
   }
 
-  join(peerId: string, roomCode: string, roomToken: string): JoinRoomResult {
+  join(peerId: string, roomCode: string, roomToken?: string): JoinRoomResult {
     this.expireRooms();
     if (!isValidRoomCode(roomCode)) {
       return { success: false, reason: 'invalid-room-code' };
@@ -76,7 +76,7 @@ export class RoomManager {
     if (room === undefined) {
       return { success: false, reason: 'room-not-found' };
     }
-    if (!tokensMatch(room.token, roomToken)) {
+    if (roomToken !== undefined && !tokensMatch(room.token, roomToken)) {
       return { success: false, reason: 'room-access-denied' };
     }
     if (room.peerIds.size >= MAX_ROOM_PEERS) {
