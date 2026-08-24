@@ -92,10 +92,20 @@ export function App() {
           </div>
 
           <div className="nav-status">
-            <span className={`status-pill ${isDataChannelOpen ? 'connected' : connection.credentials ? 'waiting' : 'idle'}`}>
+            <span
+              className={`status-pill ${
+                isDataChannelOpen
+                  ? 'connected'
+                  : isPeerConnecting || connection.credentials
+                  ? 'waiting'
+                  : 'idle'
+              }`}
+            >
               <span className="dot" />
               <span className="status-label">
-                {isDataChannelOpen
+                {progress
+                  ? 'Transferring'
+                  : isDataChannelOpen
                   ? 'Connected'
                   : isPeerConnecting
                   ? 'Connecting'
@@ -148,13 +158,13 @@ export function App() {
           {/* Connected Room Top Bar */}
           {connection.credentials && (
             <div className="room-top-bar">
-              <div className="room-top-title">
-                <span className="live-indicator" />
-                <span>Session Active</span>
+              <div className={`room-top-title ${isDataChannelOpen ? 'connected' : 'waiting'}`}>
+                <span className={`live-indicator ${isDataChannelOpen ? 'connected' : 'waiting'}`} />
+                <span>{progress ? 'Transfer in Progress' : isDataChannelOpen ? 'Session Active' : 'Waiting for Peer'}</span>
               </div>
               <button
                 type="button"
-                className="btn-link-action"
+                className="btn-disconnect"
                 onClick={connection.disconnect}
               >
                 Disconnect
@@ -166,7 +176,7 @@ export function App() {
           {!connection.credentials && activeTab === 'send' && (
             <div className="panel-content">
               <p className="panel-helper">
-                Initialize an ephemeral room session to generate a secure 10-character code.
+                Initialize an ephemeral room session.
               </p>
               <button
                 type="button"
@@ -299,34 +309,38 @@ export function App() {
           )}
 
           {/* ACTIVE TRANSFER PROGRESS */}
-          {progress && (
-            <div className="progress-section">
-              <div className="progress-meta">
-                <span className="progress-name">{progress.name}</span>
-                <span className="progress-pct font-mono">
-                  {Math.round((progress.transferred / progress.total) * 100)}%
-                </span>
+          {progress && (() => {
+            const percent = Math.min(100, Math.round((progress.transferred / progress.total) * 100));
+            const isComplete = percent >= 100;
+            return (
+              <div className="progress-section">
+                <div className="progress-meta">
+                  <span className="progress-name">{progress.name}</span>
+                  <span className={`progress-pct font-mono ${isComplete ? 'is-complete' : ''}`}>
+                    {percent}%
+                  </span>
+                </div>
+                <div className="progress-track">
+                  <div
+                    className={`progress-fill ${isComplete ? 'is-complete' : ''}`}
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+                <div className="progress-sub-row">
+                  <span className="font-mono text-xs">
+                    {formatBytes(progress.transferred)} / {formatBytes(progress.total)}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-text-danger"
+                    onClick={connection.cancelTransfer}
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
-              <div className="progress-track">
-                <div
-                  className="progress-fill"
-                  style={{ width: `${(progress.transferred / progress.total) * 100}%` }}
-                />
-              </div>
-              <div className="progress-sub-row">
-                <span className="font-mono text-xs">
-                  {formatBytes(progress.transferred)} / {formatBytes(progress.total)}
-                </span>
-                <button
-                  type="button"
-                  className="btn-text-danger"
-                  onClick={connection.cancelTransfer}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* RECEIVED FILE CARD */}
           {connection.receivedFile && (

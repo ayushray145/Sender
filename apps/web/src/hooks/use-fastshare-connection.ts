@@ -65,8 +65,19 @@ export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
             channel,
             onSendProgress: setSendProgress,
             onReceiveProgress: setReceiveProgress,
-            onFileReceived: ({ file }) => setReceivedFile(file),
-            onError: (transferError) => setError(transferError.message),
+            onFileReceived: ({ file }) => {
+              setReceiveProgress(undefined);
+              setReceivedFile(file);
+            },
+            onCancelled: () => {
+              setSendProgress(undefined);
+              setReceiveProgress(undefined);
+            },
+            onError: (transferError) => {
+              setSendProgress(undefined);
+              setReceiveProgress(undefined);
+              setError(transferError.message);
+            },
           });
         },
         onDataChannelUnavailable: () => {
@@ -120,12 +131,20 @@ export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
   const sendFile = useCallback(async (file: File) => {
     try {
       setSendProgress(undefined);
+      setReceivedFile(undefined);
       await transferRef.current?.sendFile(file);
     } catch (sendError) {
-      setError(sendError instanceof Error ? sendError.message : 'Unable to send the file.');
+      setSendProgress(undefined);
+      if (!(sendError instanceof Error && sendError.message === 'Transfer cancelled.')) {
+        setError(sendError instanceof Error ? sendError.message : 'Unable to send the file.');
+      }
     }
   }, []);
-  const cancelTransfer = useCallback(() => transferRef.current?.cancel(), []);
+  const cancelTransfer = useCallback(() => {
+    transferRef.current?.cancel();
+    setSendProgress(undefined);
+    setReceiveProgress(undefined);
+  }, []);
 
   return {
     credentials,

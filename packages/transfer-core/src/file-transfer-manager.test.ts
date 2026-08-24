@@ -49,7 +49,7 @@ describe('FileTransferManager', () => {
     });
     const sender = new FileTransferManager({ channel: senderChannel });
     await sender.sendFile(new File(['FastShare'], 'hello.txt', { type: 'text/plain' }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 20));
     expect(received?.name).toBe('hello.txt');
     expect(received?.type).toBe('text/plain');
     expect(await received?.text()).toBe('FastShare');
