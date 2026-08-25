@@ -3,8 +3,22 @@ import { useFastShareConnection } from './hooks/use-fastshare-connection.js';
 import { formatBytes, createShareableLink, parseShareableLink } from './utils.js';
 import { createZipBlob } from './zip.js';
 
-const signalingUrl = import.meta.env.VITE_SIGNALING_URL ?? 'ws://localhost:8080';
-const stunUrl = import.meta.env.VITE_STUN_URL ?? '';
+function getDefaultSignalingUrl(): string {
+  const envUrl = import.meta.env.VITE_SIGNALING_URL;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
+    return envUrl.trim();
+  }
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+    return `wss://${window.location.host}`;
+  }
+  return 'ws://localhost:8080';
+}
+
+const signalingUrl = getDefaultSignalingUrl();
+const stunUrl =
+  (import.meta.env.VITE_STUN_URL && import.meta.env.VITE_STUN_URL.trim() !== '')
+    ? import.meta.env.VITE_STUN_URL.trim()
+    : 'stun:stun.l.google.com:19302';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<'send' | 'receive'>('send');
