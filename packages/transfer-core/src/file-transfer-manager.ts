@@ -193,12 +193,14 @@ export class FileTransferManager {
       size !== receiver.metadata.size
     )
       throw new Error('File transfer completed with missing or unexpected chunks.');
+
+    this.receiver = undefined;
+
     const file = new File(receiver.chunks, receiver.metadata.name, {
       type: receiver.metadata.mimeType,
     });
     const digest = await sha256(file);
     if (digest !== receiver.metadata.sha256) throw new Error('File integrity verification failed.');
-    this.receiver = undefined;
     this.options.onFileReceived?.({ file, transferId });
   }
 

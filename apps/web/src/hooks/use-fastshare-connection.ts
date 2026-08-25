@@ -7,6 +7,16 @@ import { SignalingClient } from '../network/signaling-client.js';
 
 type RoomCredentials = { readonly roomCode: string; readonly roomToken?: string | undefined };
 
+export type SendingFileStatus = 'queued' | 'transferring' | 'completed' | 'error' | 'cancelled';
+
+export type SendingFileItem = {
+  readonly id: string;
+  readonly name: string;
+  readonly size: number;
+  readonly status: SendingFileStatus;
+  readonly transferred: number;
+};
+
 export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
   const clientRef = useRef<SignalingClient | undefined>(undefined);
   const managerRef = useRef<PeerConnectionManager | undefined>(undefined);
@@ -21,7 +31,8 @@ export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
   const [error, setError] = useState<string>();
   const [sendProgress, setSendProgress] = useState<TransferProgress>();
   const [receiveProgress, setReceiveProgress] = useState<TransferProgress>();
-  const [receivedFile, setReceivedFile] = useState<File>();
+  const [receivedFiles, setReceivedFiles] = useState<File[]>([]);
+  const [sendingQueue, setSendingQueue] = useState<SendingFileItem[]>([]);
 
   const disconnect = useCallback(() => {
     transferRef.current?.destroy();
@@ -39,7 +50,8 @@ export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
     setReceivedTest(false);
     setSendProgress(undefined);
     setReceiveProgress(undefined);
-    setReceivedFile(undefined);
+    setReceivedFiles([]);
+    setSendingQueue([]);
     setError(undefined);
   }, []);
 
@@ -63,11 +75,20 @@ export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
           transferRef.current?.destroy();
           transferRef.current = new FileTransferManager({
             channel,
-            onSendProgress: setSendProgress,
+            onSendProgress: (progress) => {
+              setSendProgress(progress);
+              setSendingQueue((prev) =>
+                prev.map((item) =>
+                  item.status === 'transferring'
+                    ? { ...item, transferred: progress.transferred }
+                    : item,
+                ),
+              );
+            },
             onReceiveProgress: setReceiveProgress,
             onFileReceived: ({ file }) => {
               setReceiveProgress(undefined);
-              setReceivedFile(file);
+              setReceivedFiles((prev) => [...prev, file]);
             },
             onCancelled: () => {
               setSendProgress(undefined);
@@ -89,8 +110,11 @@ export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
       managerRef.current = manager;
       client.onError((connectionError) => setError(connectionError.message));
       client.onMessage((message) => {
-        if (message.type === 'room.created')
+        if (message.type === 'room.created') {
           setCredentials({ roomCode: message.roomCode, roomToken: message.roomToken });
+        } else if (message.type === 'room.joined') {
+          setCredentials({ roomCode: message.roomCode });
+        }
       });
       try {
         await client.connect();
@@ -128,22 +152,81 @@ export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
     }
   }, []);
 
-  const sendFile = useCallback(async (file: File) => {
-    try {
-      setSendProgress(undefined);
-      setReceivedFile(undefined);
-      await transferRef.current?.sendFile(file);
-    } catch (sendError) {
-      setSendProgress(undefined);
-      if (!(sendError instanceof Error && sendError.message === 'Transfer cancelled.')) {
-        setError(sendError instanceof Error ? sendError.message : 'Unable to send the file.');
+  const sendFiles = useCallback(async (files: FileList | readonly File[] | File[]) => {
+    const fileList = Array.from(files);
+    if (fileList.length === 0) return;
+
+    const initialQueue: SendingFileItem[] = fileList.map((file, idx) => ({
+      id: `${Date.now()}-${idx}-${file.name}`,
+      name: file.name,
+      size: file.size,
+      status: 'queued',
+      transferred: 0,
+    }));
+    setSendingQueue(initialQueue);
+
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i]!;
+      const currentId = initialQueue[i]!.id;
+
+      setSendingQueue((prev) =>
+        prev.map((item) =>
+          item.id === currentId ? { ...item, status: 'transferring' } : item,
+        ),
+      );
+
+      try {
+        setSendProgress(undefined);
+        await transferRef.current?.sendFile(file);
+        setSendingQueue((prev) =>
+          prev.map((item) =>
+            item.id === currentId
+              ? { ...item, status: 'completed', transferred: item.size }
+              : item,
+          ),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      } catch (sendError) {
+        setSendProgress(undefined);
+        const isCancelled =
+          sendError instanceof Error && sendError.message === 'Transfer cancelled.';
+        setSendingQueue((prev) =>
+          prev.map((item, idx) => {
+            if (item.id === currentId) {
+              return { ...item, status: isCancelled ? 'cancelled' : 'error' };
+            }
+            if (idx > i && item.status === 'queued') {
+              return { ...item, status: 'cancelled' };
+            }
+            return item;
+          }),
+        );
+        if (!isCancelled) {
+          setError(sendError instanceof Error ? sendError.message : 'Unable to send the file.');
+        }
+        break;
       }
     }
   }, []);
+
+  const sendFile = useCallback((file: File) => sendFiles([file]), [sendFiles]);
+
   const cancelTransfer = useCallback(() => {
     transferRef.current?.cancel();
     setSendProgress(undefined);
     setReceiveProgress(undefined);
+    setSendingQueue((prev) =>
+      prev.map((item) =>
+        item.status === 'transferring' || item.status === 'queued'
+          ? { ...item, status: 'cancelled' }
+          : item,
+      ),
+    );
+  }, []);
+
+  const clearSendingQueue = useCallback(() => {
+    setSendingQueue([]);
+    setSendProgress(undefined);
   }, []);
 
   return {
@@ -155,10 +238,14 @@ export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
     joinRoom,
     sendConnectionTest,
     sendFile,
+    sendFiles,
     cancelTransfer,
     sendProgress,
     receiveProgress,
-    receivedFile,
+    receivedFile: receivedFiles[receivedFiles.length - 1],
+    receivedFiles,
+    sendingQueue,
+    clearSendingQueue,
     disconnect,
   };
 }

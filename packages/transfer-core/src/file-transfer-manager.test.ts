@@ -57,6 +57,34 @@ describe('FileTransferManager', () => {
     receiver.destroy();
   });
 
+  it('transfers multiple files sequentially without race conditions', async () => {
+    const [senderChannel, receiverChannel] = channels();
+    const receivedFiles: File[] = [];
+    const receiver = new FileTransferManager({
+      channel: receiverChannel,
+      onFileReceived: ({ file }) => {
+        receivedFiles.push(file);
+      },
+    });
+    const sender = new FileTransferManager({ channel: senderChannel });
+
+    const file1 = new File(['Content One'], 'file1.txt', { type: 'text/plain' });
+    const file2 = new File(['Content Two'], 'file2.txt', { type: 'text/plain' });
+
+    await sender.sendFile(file1);
+    await sender.sendFile(file2);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    expect(receivedFiles.length).toBe(2);
+    expect(receivedFiles[0]?.name).toBe('file1.txt');
+    expect(await receivedFiles[0]?.text()).toBe('Content One');
+    expect(receivedFiles[1]?.name).toBe('file2.txt');
+    expect(await receivedFiles[1]?.text()).toBe('Content Two');
+
+    sender.destroy();
+    receiver.destroy();
+  });
+
   it('detects an invalid chunk sequence', async () => {
     const [, receiverChannel] = channels();
     const errors: Error[] = [];

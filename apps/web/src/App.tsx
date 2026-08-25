@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, type DragEvent } from 'react';
 import { useFastShareConnection } from './hooks/use-fastshare-connection.js';
 import { formatBytes, createShareableLink, parseShareableLink } from './utils.js';
+import { createZipBlob } from './zip.js';
 
 const signalingUrl = import.meta.env.VITE_SIGNALING_URL ?? 'ws://localhost:8080';
 const stunUrl = import.meta.env.VITE_STUN_URL ?? '';
@@ -38,16 +39,25 @@ export function App() {
     }
   }, []);
 
-  const handleDownload = useCallback(() => {
-    const file = connection.receivedFile;
-    if (!file) return;
+  const handleDownloadFile = useCallback((file: File) => {
     const url = URL.createObjectURL(file);
     const link = document.createElement('a');
     link.href = url;
     link.download = file.name;
     link.click();
     URL.revokeObjectURL(url);
-  }, [connection.receivedFile]);
+  }, []);
+
+  const handleDownloadZip = useCallback(async () => {
+    if (connection.receivedFiles.length === 0) return;
+    const zipBlob = await createZipBlob(connection.receivedFiles);
+    const url = URL.createObjectURL(zipBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'Senderrr-files.zip';
+    link.click();
+    URL.revokeObjectURL(url);
+  }, [connection.receivedFiles]);
 
   const handleDragOver = (e: DragEvent) => {
     e.preventDefault();
@@ -63,9 +73,9 @@ export function App() {
     e.preventDefault();
     setIsDragging(false);
     if (!isDataChannelOpen) return;
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      void connection.sendFile(file);
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      void connection.sendFiles(files);
     }
   };
 
@@ -195,6 +205,8 @@ export function App() {
               onSubmit={(e) => {
                 e.preventDefault();
                 connection.joinRoom(roomCode, roomToken || undefined);
+                setRoomCode('');
+                setRoomToken('');
               }}
             >
               <div className="input-group">
@@ -226,7 +238,9 @@ export function App() {
             <div className="session-details">
               <div className="credentials-row">
                 <div className="cred-box">
-                  <span className="meta-label">Room Code</span>
+                  <span className="meta-label">
+                    {shareableUrl ? 'Room Code' : 'Connected Room'}
+                  </span>
                   <div className="cred-action-row">
                     <span className="code-value">{connection.credentials.roomCode}</span>
                     <button
@@ -239,29 +253,31 @@ export function App() {
                   </div>
                 </div>
 
-                <div className="cred-box">
-                  <span className="meta-label">Share Link</span>
-                  <div className="cred-action-row">
-                    <button
-                      type="button"
-                      className="btn-outline-pill"
-                      onClick={() => copyToClipboard(shareableUrl, 'link')}
-                    >
-                      {copiedField === 'link' ? 'Link Copied' : 'Copy Link'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-outline-pill"
-                      onClick={() => setShowQR(!showQR)}
-                    >
-                      {showQR ? 'Hide QR' : 'QR Code'}
-                    </button>
+                {shareableUrl && (
+                  <div className="cred-box">
+                    <span className="meta-label">Share Link</span>
+                    <div className="cred-action-row">
+                      <button
+                        type="button"
+                        className="btn-outline-pill"
+                        onClick={() => copyToClipboard(shareableUrl, 'link')}
+                      >
+                        {copiedField === 'link' ? 'Link Copied' : 'Copy Link'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-outline-pill"
+                        onClick={() => setShowQR(!showQR)}
+                      >
+                        {showQR ? 'Hide QR' : 'QR Code'}
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Collapsible QR Code */}
-              {showQR && (
+              {showQR && shareableUrl && (
                 <div className="qr-box">
                   <img src={qrImageUrl} alt="FastShare QR Code" className="qr-render" />
                   <span className="qr-hint">Scan with mobile camera to join</span>
@@ -271,9 +287,11 @@ export function App() {
               {/* Status Alert Bar */}
               <div className={`connection-callout ${isDataChannelOpen ? 'callout-success' : 'callout-waiting'}`}>
                 {isDataChannelOpen ? (
-                  <span>Peer connected. You may now transfer files.</span>
-                ) : (
+                  <span>Connected with peer. Ready to transfer and receive files.</span>
+                ) : shareableUrl ? (
                   <span>Waiting for peer to connect. Share the room code or link above.</span>
+                ) : (
+                  <span>Connecting to peer session...</span>
                 )}
               </div>
             </div>
@@ -289,46 +307,145 @@ export function App() {
             >
               <div className="dropzone-body">
                 <div className="dropzone-text">
-                  <p className="dropzone-main-text">Drag and drop file here</p>
+                  <p className="dropzone-main-text">Drag and drop file(s) here</p>
                   <p className="dropzone-sub-text">Up to 5 GiB per room session</p>
                 </div>
                 <label className="btn-outline">
                   <input
                     type="file"
+                    multiple
                     className="sr-only"
                     onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) void connection.sendFile(file);
+                      const files = event.target.files;
+                      if (files && files.length > 0) void connection.sendFiles(files);
                       event.target.value = '';
                     }}
                   />
-                  Select File
+                  Select Files
                 </label>
               </div>
             </div>
           )}
 
-          {/* ACTIVE TRANSFER PROGRESS */}
-          {progress && (() => {
-            const percent = Math.min(100, Math.round((progress.transferred / progress.total) * 100));
-            const isComplete = percent >= 100;
+          {/* SENDER: BATCH SENDING QUEUE STATUS */}
+          {connection.sendingQueue.length > 0 && (() => {
+            const totalBytes = connection.sendingQueue.reduce((acc, item) => acc + item.size, 0);
+            const totalTransferred = connection.sendingQueue.reduce((acc, item) => acc + item.transferred, 0);
+            const completedCount = connection.sendingQueue.filter((item) => item.status === 'completed').length;
+            const totalPercent = totalBytes > 0 ? Math.min(100, Math.round((totalTransferred / totalBytes) * 100)) : 0;
+            const isBatchComplete = totalPercent >= 100 && completedCount === connection.sendingQueue.length;
+            const isAnyActive = connection.sendingQueue.some(
+              (item) => item.status === 'transferring' || item.status === 'queued'
+            );
+
+            return (
+              <div className="queue-section">
+                <div className="queue-header">
+                  <div>
+                    <span className="queue-title">
+                      Sending Files ({completedCount}/{connection.sendingQueue.length})
+                    </span>
+                    <span className="font-mono text-xs text-muted queue-total-size">
+                      {formatBytes(totalTransferred)} / {formatBytes(totalBytes)} ({totalPercent}%)
+                    </span>
+                  </div>
+                  {isAnyActive ? (
+                    <button
+                      type="button"
+                      className="btn-text-danger"
+                      onClick={connection.cancelTransfer}
+                    >
+                      Cancel All
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn-outline-pill"
+                      onClick={connection.clearSendingQueue}
+                    >
+                      Dismiss
+                    </button>
+                  )}
+                </div>
+
+                <div className="progress-track">
+                  <div
+                    className={`progress-fill ${isBatchComplete ? 'is-complete' : ''}`}
+                    style={{ width: `${totalPercent}%` }}
+                  />
+                </div>
+
+                <div className="queue-list">
+                  {connection.sendingQueue.map((item) => {
+                    const itemPct = item.size > 0 ? Math.min(100, Math.round((item.transferred / item.size) * 100)) : 0;
+                    return (
+                      <div key={item.id} className="queue-row">
+                        <div className="queue-row-info">
+                          <div className="queue-row-meta">
+                            <span className="queue-file-name">{item.name}</span>
+                            <span className="font-mono text-xs text-muted">
+                              {formatBytes(item.size)}
+                            </span>
+                          </div>
+                          {item.status === 'transferring' && (
+                            <div className="queue-mini-track">
+                              <div
+                                className="queue-mini-fill"
+                                style={{ width: `${itemPct}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="queue-row-status">
+                          {item.status === 'queued' && (
+                            <span className="status-tag tag-queued">Queued</span>
+                          )}
+                          {item.status === 'transferring' && (
+                            <span className="status-tag tag-transferring font-mono">{itemPct}%</span>
+                          )}
+                          {item.status === 'completed' && (
+                            <span className="status-tag tag-completed">100% Sent</span>
+                          )}
+                          {item.status === 'cancelled' && (
+                            <span className="status-tag tag-cancelled">Cancelled</span>
+                          )}
+                          {item.status === 'error' && (
+                            <span className="status-tag tag-error">Failed</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* RECEIVER: ACTIVE INCOMING FILE PROGRESS */}
+          {!connection.sendingQueue.length && connection.receiveProgress && (() => {
+            const receivePct = Math.min(
+              100,
+              Math.round((connection.receiveProgress.transferred / connection.receiveProgress.total) * 100)
+            );
+            const isComplete = receivePct >= 100;
             return (
               <div className="progress-section">
                 <div className="progress-meta">
-                  <span className="progress-name">{progress.name}</span>
+                  <span className="progress-name">{connection.receiveProgress.name}</span>
                   <span className={`progress-pct font-mono ${isComplete ? 'is-complete' : ''}`}>
-                    {percent}%
+                    {receivePct}%
                   </span>
                 </div>
                 <div className="progress-track">
                   <div
                     className={`progress-fill ${isComplete ? 'is-complete' : ''}`}
-                    style={{ width: `${percent}%` }}
+                    style={{ width: `${receivePct}%` }}
                   />
                 </div>
                 <div className="progress-sub-row">
                   <span className="font-mono text-xs">
-                    {formatBytes(progress.transferred)} / {formatBytes(progress.total)}
+                    {formatBytes(connection.receiveProgress.transferred)} / {formatBytes(connection.receiveProgress.total)}
                   </span>
                   <button
                     type="button"
@@ -342,22 +459,64 @@ export function App() {
             );
           })()}
 
-          {/* RECEIVED FILE CARD */}
-          {connection.receivedFile && (
+          {/* RECEIVED FILES */}
+          {connection.receivedFiles.length === 1 && (
             <div className="received-card">
               <div className="received-meta">
-                <span className="received-title">{connection.receivedFile.name}</span>
+                <span className="received-title">{connection.receivedFiles[0]!.name}</span>
                 <span className="font-mono text-xs text-muted">
-                  {formatBytes(connection.receivedFile.size)}
+                  {formatBytes(connection.receivedFiles[0]!.size)}
                 </span>
               </div>
               <button
                 type="button"
                 className="btn-solid"
-                onClick={handleDownload}
+                onClick={() => handleDownloadFile(connection.receivedFiles[0]!)}
               >
                 Download
               </button>
+            </div>
+          )}
+
+          {connection.receivedFiles.length > 1 && (
+            <div className="received-section">
+              <div className="received-section-header">
+                <div>
+                  <span className="received-section-title">
+                    Received Files ({connection.receivedFiles.length})
+                  </span>
+                  <span className="font-mono text-xs text-muted received-total-size">
+                    {formatBytes(connection.receivedFiles.reduce((sum, f) => sum + f.size, 0))} total
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="btn-solid"
+                  onClick={handleDownloadZip}
+                >
+                  Download All as ZIP
+                </button>
+              </div>
+
+              <div className="received-list">
+                {connection.receivedFiles.map((file, idx) => (
+                  <div key={`${file.name}-${idx}`} className="received-list-row">
+                    <div className="received-meta">
+                      <span className="received-title">{file.name}</span>
+                      <span className="font-mono text-xs text-muted">
+                        {formatBytes(file.size)}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-outline-pill"
+                      onClick={() => handleDownloadFile(file)}
+                    >
+                      Download
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
