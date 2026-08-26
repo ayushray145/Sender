@@ -17,6 +17,15 @@ export type SendingFileItem = {
   readonly transferred: number;
 };
 
+const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' },
+  { urls: 'stun:stun4.l.google.com:19302' },
+  { urls: 'stun:global.stun.twilio.com:3478' },
+];
+
 export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
   const clientRef = useRef<SignalingClient | undefined>(undefined);
   const managerRef = useRef<PeerConnectionManager | undefined>(undefined);
@@ -63,8 +72,11 @@ export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
       setError(undefined);
       setReceivedTest(false);
       const client = new SignalingClient(signalingUrl);
-      const configuration: RTCConfiguration =
-        stunUrl.trim() === '' ? {} : { iceServers: [{ urls: stunUrl.trim() }] };
+      const iceServers: RTCIceServer[] =
+        stunUrl.trim() !== ''
+          ? [{ urls: stunUrl.trim() }, ...DEFAULT_ICE_SERVERS.filter((s) => s.urls !== stunUrl.trim())]
+          : DEFAULT_ICE_SERVERS;
+      const configuration: RTCConfiguration = { iceServers };
       const manager = new PeerConnectionManager({
         signaling: client,
         configuration,

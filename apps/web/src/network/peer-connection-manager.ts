@@ -123,7 +123,11 @@ export class PeerConnectionManager {
       this.pendingCandidates.push(candidate);
       return;
     }
-    await connection.addIceCandidate(candidate);
+    try {
+      await connection.addIceCandidate(candidate);
+    } catch {
+      // Non-fatal: candidate may be redundant or obsolete
+    }
   }
 
   private async flushPendingCandidates(): Promise<void> {
@@ -131,7 +135,13 @@ export class PeerConnectionManager {
     if (connection === undefined || connection.remoteDescription === null) return;
     const candidates = this.pendingCandidates;
     this.pendingCandidates = [];
-    for (const candidate of candidates) await connection.addIceCandidate(candidate);
+    for (const candidate of candidates) {
+      try {
+        await connection.addIceCandidate(candidate);
+      } catch {
+        // Non-fatal: candidate may be redundant or obsolete
+      }
+    }
   }
 
   private getOrCreateConnection(): RTCPeerConnection {
