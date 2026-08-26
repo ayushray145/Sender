@@ -153,8 +153,13 @@ export class PeerConnectionManager {
   private getOrCreateConnection(): RTCPeerConnection {
     if (this.connection !== undefined) return this.connection;
     const connection = this.createPeerConnection(this.configuration);
+    console.info('[WebRTC] RTCPeerConnection created with config:', this.configuration);
     connection.addEventListener('icecandidate', (event) => {
-      if (event.candidate === null) return;
+      if (event.candidate === null) {
+        console.info('[WebRTC] ICE gathering complete (null candidate)');
+        return;
+      }
+      console.info('[WebRTC] Local ICE candidate:', event.candidate.type, event.candidate.candidate);
       this.options.signaling.send({
         type: 'signal.ice-candidate',
         candidate: {
@@ -165,13 +170,18 @@ export class PeerConnectionManager {
         },
       });
     });
+    connection.addEventListener('icegatheringstatechange', () => {
+      console.info('[WebRTC] ICE gathering state:', connection.iceGatheringState);
+    });
     connection.addEventListener('datachannel', (event) => this.attachDataChannel(event.channel));
     connection.addEventListener('connectionstatechange', () => {
+      console.info('[WebRTC] Connection state:', connection.connectionState);
       this.emitStatus();
       if (connection.connectionState === 'failed')
         this.handleConnectionFailure('The WebRTC connection failed.');
     });
     connection.addEventListener('iceconnectionstatechange', () => {
+      console.info('[WebRTC] ICE connection state:', connection.iceConnectionState);
       this.emitStatus();
       if (connection.iceConnectionState === 'failed')
         this.handleConnectionFailure('ICE connectivity failed.');
