@@ -61,7 +61,15 @@ function bindConnection(signaling: SignalingService, socket: WebSocket): void {
   socket.on('close', () => signaling.disconnect(peerId));
   socket.on('error', () => signaling.disconnect(peerId));
 }
-function handleHttpRequest(_request: IncomingMessage, response: ServerResponse): void {
+function handleHttpRequest(request: IncomingMessage, response: ServerResponse): void {
+  if (request.method === 'GET' && (request.url === '/' || request.url === '/health')) {
+    response.writeHead(200, {
+      'content-type': 'application/json',
+      'access-control-allow-origin': '*',
+    });
+    response.end(JSON.stringify({ status: 'ok', service: 'Senderrr Signaling Server' }));
+    return;
+  }
   response.writeHead(404, {
     'content-type': 'application/json',
     'content-security-policy': "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",

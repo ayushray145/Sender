@@ -118,13 +118,16 @@ export class PeerConnectionManager {
   }
 
   private async handleCandidate(candidate: IceCandidate): Promise<void> {
+    if (!candidate || !candidate.candidate) return;
     const connection = this.connection;
     if (connection === undefined || connection.remoteDescription === null) {
       this.pendingCandidates.push(candidate);
       return;
     }
     try {
-      await connection.addIceCandidate(candidate);
+      const iceCandidate =
+        typeof RTCIceCandidate !== 'undefined' ? new RTCIceCandidate(candidate) : candidate;
+      await connection.addIceCandidate(iceCandidate);
     } catch {
       // Non-fatal: candidate may be redundant or obsolete
     }
@@ -136,8 +139,11 @@ export class PeerConnectionManager {
     const candidates = this.pendingCandidates;
     this.pendingCandidates = [];
     for (const candidate of candidates) {
+      if (!candidate || !candidate.candidate) continue;
       try {
-        await connection.addIceCandidate(candidate);
+        const iceCandidate =
+          typeof RTCIceCandidate !== 'undefined' ? new RTCIceCandidate(candidate) : candidate;
+        await connection.addIceCandidate(iceCandidate);
       } catch {
         // Non-fatal: candidate may be redundant or obsolete
       }

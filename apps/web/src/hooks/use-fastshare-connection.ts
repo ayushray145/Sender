@@ -18,12 +18,23 @@ export type SendingFileItem = {
 };
 
 const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
+  // STUN servers — used first for direct peer-to-peer when NAT allows it
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
   { urls: 'stun:stun2.l.google.com:19302' },
   { urls: 'stun:stun3.l.google.com:19302' },
   { urls: 'stun:stun4.l.google.com:19302' },
-  { urls: 'stun:global.stun.twilio.com:3478' },
+  // Free public TURN relay — used as fallback when symmetric NAT blocks direct P2P
+  {
+    urls: [
+      'turn:openrelay.metered.ca:80',
+      'turn:openrelay.metered.ca:443',
+      'turn:openrelay.metered.ca:443?transport=tcp',
+      'turns:openrelay.metered.ca:443',
+    ],
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
 ];
 
 export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
