@@ -48,6 +48,8 @@ export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
     dataChannelState: 'none',
   });
   const [receivedTest, setReceivedTest] = useState(false);
+  const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  const [isJoiningRoom, setIsJoiningRoom] = useState(false);
   const [error, setError] = useState<string>();
   const [sendProgress, setSendProgress] = useState<TransferProgress>();
   const [receiveProgress, setReceiveProgress] = useState<TransferProgress>();
@@ -68,6 +70,8 @@ export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
     });
     setCredentials(undefined);
     setReceivedTest(false);
+    setIsCreatingRoom(false);
+    setIsJoiningRoom(false);
     setSendProgress(undefined);
     setReceiveProgress(undefined);
     setReceivedFiles([]);
@@ -131,15 +135,30 @@ export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
       });
       clientRef.current = client;
       managerRef.current = manager;
-      client.onError((connectionError) => setError(connectionError.message));
+      client.onError((connectionError) => {
+        setIsCreatingRoom(false);
+        setIsJoiningRoom(false);
+        setError(connectionError.message);
+      });
       client.onMessage((message) => {
         if (message.type === 'room.created') {
+          setIsCreatingRoom(false);
           setCredentials({ roomCode: message.roomCode, roomToken: message.roomToken });
         } else if (message.type === 'room.joined') {
+          setIsJoiningRoom(false);
           setCredentials({ roomCode: message.roomCode });
+        } else if (message.type === 'error') {
+          setIsCreatingRoom(false);
+          setIsJoiningRoom(false);
+          setError(message.message);
         }
       });
       try {
+        if (action === 'create') {
+          setIsCreatingRoom(true);
+        } else {
+          setIsJoiningRoom(true);
+        }
         await client.connect();
         if (action === 'create') {
           client.send({ type: 'room.create' });
@@ -153,6 +172,8 @@ export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
           client.send(joinMsg);
         }
       } catch (connectionError) {
+        setIsCreatingRoom(false);
+        setIsJoiningRoom(false);
         setError(connectionError instanceof Error ? connectionError.message : 'Unable to connect.');
         disconnect();
       }
@@ -255,6 +276,8 @@ export function useFastShareConnection(signalingUrl: string, stunUrl: string) {
   return {
     credentials,
     status,
+    isCreatingRoom,
+    isJoiningRoom,
     receivedTest,
     error,
     createRoom,

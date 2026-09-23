@@ -120,7 +120,7 @@ export function App() {
               className={`status-pill ${
                 isDataChannelOpen
                   ? 'connected'
-                  : isPeerConnecting || connection.credentials
+                  : isPeerConnecting || connection.credentials || connection.isCreatingRoom || connection.isJoiningRoom
                   ? 'waiting'
                   : 'idle'
               }`}
@@ -131,6 +131,10 @@ export function App() {
                   ? 'Transferring'
                   : isDataChannelOpen
                   ? 'Connected'
+                  : connection.isCreatingRoom
+                  ? 'Creating Room...'
+                  : connection.isJoiningRoom
+                  ? 'Joining Room...'
                   : isPeerConnecting
                   ? 'Connecting'
                   : connection.credentials
@@ -206,8 +210,16 @@ export function App() {
                 type="button"
                 className="btn-solid"
                 onClick={connection.createRoom}
+                disabled={connection.isCreatingRoom}
               >
-                Create Room
+                {connection.isCreatingRoom ? (
+                  <>
+                    <span className="spinner" aria-hidden="true" />
+                    <span>Creating Room...</span>
+                  </>
+                ) : (
+                  'Create Room'
+                )}
               </button>
             </div>
           )}
@@ -240,9 +252,16 @@ export function App() {
               <button
                 type="submit"
                 className="btn-solid"
-                disabled={roomCode.trim().length !== 10}
+                disabled={roomCode.trim().length !== 10 || connection.isJoiningRoom}
               >
-                Join Room
+                {connection.isJoiningRoom ? (
+                  <>
+                    <span className="spinner" aria-hidden="true" />
+                    <span>Joining Room...</span>
+                  </>
+                ) : (
+                  'Join Room'
+                )}
               </button>
             </form>
           )}
